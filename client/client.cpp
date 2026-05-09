@@ -26,7 +26,7 @@ int main() {
 
     char buffer[1024] = {0};
 
-    // Keep communicating until we quit
+    // Keep communicating until disconnected
     while (true) {
 
         // Receive message from server
@@ -38,28 +38,18 @@ int main() {
             break;
         }
 
-        std::cout << buffer << std::endl;
+        // Print server message
+        std::cout << buffer;
 
-        // Send our response
+        // If server is asking for input send it
         std::string input;
         std::getline(std::cin, input);
 
         if (input.empty()) continue;
 
         send(client_socket, input.c_str(), input.size(), 0);
-
-        // If we said quit, stop
-        if (input == "2") {
-
-            // Receive goodbye message
-            memset(buffer, 0, sizeof(buffer));
-            recv(client_socket, buffer, sizeof(buffer), 0);
-            std::cout << buffer << std::endl;
-            break;
-        }
     }
 
     close(client_socket);
-    std::cout << "Disconnected." << std::endl;
     return 0;
 }
