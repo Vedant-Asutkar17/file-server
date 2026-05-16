@@ -144,6 +144,46 @@ public:
 
         return result;
     }
+    // DELETE — remove a file from server
+    bool deleteFile(std::string filename) {
+
+        std::string filepath = upload_dir + "/" + filename;
+
+        // Check file exists
+        if (!fs::exists(filepath)) {
+            std::cout << "[Error] File not found: " << filename << std::endl;
+            return false;
+        }
+
+        // Delete the file
+        fs::remove(filepath);
+        std::cout << "[Delete] Removed: " << filename << std::endl;
+        return true;
+    }
+
+    // RENAME — rename a file on server
+    bool renameFile(std::string old_name, std::string new_name) {
+
+        std::string old_path = upload_dir + "/" + old_name;
+        std::string new_path = upload_dir + "/" + new_name;
+
+        // Check source file exists
+        if (!fs::exists(old_path)) {
+            std::cout << "[Error] File not found: " << old_name << std::endl;
+            return false;
+        }
+
+        // Check new name doesn't already exist
+        if (fs::exists(new_path)) {
+            std::cout << "[Error] File already exists: " << new_name << std::endl;
+            return false;
+        }
+
+        // Rename
+        fs::rename(old_path, new_path);
+        std::cout << "[Rename] " << old_name << " → " << new_name << std::endl;
+        return true;
+    }
 };
 
 #endif

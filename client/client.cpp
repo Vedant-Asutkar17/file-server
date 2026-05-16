@@ -10,17 +10,28 @@
 
 namespace fs = std::filesystem;
 
-void sendMessage(int socket, std::string message) {
-    send(socket, message.c_str(), message.size(), 0);
+int sock;
+
+// Send message to server
+void sendMsg(std::string msg) {
+    send(sock, msg.c_str(), msg.size(), 0);
 }
 
-std::string receiveMessage(int socket) {
+// Receive message from server
+std::string recvMsg() {
     char buffer[4096] = {0};
-    recv(socket, buffer, sizeof(buffer), 0);
+    recv(sock, buffer, sizeof(buffer), 0);
     return std::string(buffer);
 }
 
-void uploadFile(int client_socket) {
+// Upload file
+void uploadFile() {
+    // Wait for UPLOAD_START
+    std::string signal = recvMsg();
+    if (signal.find("UPLOAD_START") == std::string::npos) {
+        std::cout << "Server error." << std::endl;
+        return;
+    }
 
     // Ask user for file path
     std::string filepath;
@@ -30,172 +41,162 @@ void uploadFile(int client_socket) {
     // Check file exists
     if (!fs::exists(filepath)) {
         std::cout << "File not found." << std::endl;
-        // Tell server we cancelled
-        sendMessage(client_socket, "CANCEL");
+        sendMsg("CANCEL");
+        usleep(100000);
+        sendMsg("0");
         return;
     }
 
-    // Get filename and size automatically
+    // Get info
     std::string filename = fs::path(filepath).filename().string();
     long filesize = fs::file_size(filepath);
+    std::cout << "Uploading: " << filename << " (" << filesize << " bytes)" << std::endl;
 
-    std::cout << "File: " << filename << std::endl;
-    std::cout << "Size: " << filesize << " bytes" << std::endl;
-
-    // Send filename to server
-    sendMessage(client_socket, filename);
+    // Send filename and size
+    sendMsg(filename);
+    usleep(200000);
+    sendMsg(std::to_string(filesize));
     usleep(200000);
 
-    // Send filesize to server
-    sendMessage(client_socket, std::to_string(filesize));
-    usleep(200000);
-
-    // Wait for READY signal from server
-    std::string ready = receiveMessage(client_socket);
+    // Wait for READY
+    std::string ready = recvMsg();
     if (ready.find("READY") == std::string::npos) {
-        std::cout << "Server not ready. Aborting." << std::endl;
+        std::cout << "Server not ready." << std::endl;
         return;
     }
 
-    // Send file in chunks
+    // Send file chunks
     std::ifstream infile(filepath, std::ios::binary);
     char buffer[4096];
     long sent = 0;
-
     while (sent < filesize) {
         infile.read(buffer, sizeof(buffer));
-        int bytes_read = infile.gcount();
-        if (bytes_read <= 0) break;
-
-        send(client_socket, buffer, bytes_read, 0);
-        sent += bytes_read;
-
-        int progress = (int)((sent * 100) / filesize);
-        std::cout << "\rUploading: " << progress << "%" << std::flush;
+        int n = infile.gcount();
+        if (n <= 0) break;
+        send(sock, buffer, n, 0);
+        sent += n;
+        std::cout << "\rProgress: " << (sent * 100 / filesize) << "%" << std::flush;
     }
-
     infile.close();
-    std::cout << "\nDone sending." << std::endl;
+    std::cout << std::endl;
 
-    // Get confirmation from server
-    std::string response = receiveMessage(client_socket);
-    std::cout << response << std::endl;
+    // Get result
+    std::cout << recvMsg() << std::endl;
 }
 
-void downloadFile(int client_socket, std::string filename) {
+// Download file
+void downloadFile() {
+    // Wait for server prompt
+    std::cout << recvMsg();
 
-    // Receive file info from server
-    std::string info = receiveMessage(client_socket);
+    // Send filename
+    std::string filename;
+    std::getline(std::cin, filename);
+    sendMsg(filename);
 
+    // Get file info
+    std::string info = recvMsg();
     if (info.find("ERROR") != std::string::npos) {
         std::cout << "File not found on server." << std::endl;
         return;
     }
 
-    // Parse filesize — format is "OK:12345"
     long filesize = std::stol(info.substr(3));
-    std::cout << "File size: " << filesize << " bytes" << std::endl;
-    std::cout << "Downloading..." << std::endl;
+    std::cout << "Size: " << filesize << " bytes. Downloading..." << std::endl;
 
-    // Save file with same name
+    // Receive file
     std::ofstream outfile(filename, std::ios::binary);
     char buffer[4096];
     long received = 0;
-
     while (received < filesize) {
-        int to_receive = std::min((long)sizeof(buffer), filesize - received);
-        int bytes = recv(client_socket, buffer, to_receive, 0);
-        if (bytes <= 0) break;
-
-        outfile.write(buffer, bytes);
-        received += bytes;
-
-        int progress = (int)((received * 100) / filesize);
-        std::cout << "\rDownloading: " << progress << "%" << std::flush;
+        int n = recv(sock, buffer, std::min((long)sizeof(buffer), filesize - received), 0);
+        if (n <= 0) break;
+        outfile.write(buffer, n);
+        received += n;
+        std::cout << "\rProgress: " << (received * 100 / filesize) << "%" << std::flush;
     }
-
     outfile.close();
-    std::cout << "\nSaved as: " << filename << std::endl;
+    std::cout << "\nSaved: " << filename << std::endl;
+}
+
+// Delete file
+void deleteFile() {
+    std::cout << recvMsg();
+    std::string filename;
+    std::getline(std::cin, filename);
+    sendMsg(filename);
+    std::cout << recvMsg() << std::endl;
+}
+
+// Rename file
+void renameFile() {
+    std::cout << recvMsg();
+    std::string old_name;
+    std::getline(std::cin, old_name);
+    sendMsg(old_name);
+
+    std::cout << recvMsg();
+    std::string new_name;
+    std::getline(std::cin, new_name);
+    sendMsg(new_name);
+
+    std::cout << recvMsg() << std::endl;
 }
 
 int main() {
 
-    // Connect to server
-    int client_socket = socket(AF_INET, SOCK_STREAM, 0);
+    // Connect
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(9999);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-    sockaddr_in server_address;
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(9999);
-    inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr);
-
-    if (connect(client_socket, (sockaddr*)&server_address,
-                sizeof(server_address)) == -1) {
+    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) == -1) {
         std::cout << "Connection failed!" << std::endl;
         return 1;
     }
-
     std::cout << "Connected to server!" << std::endl;
 
     while (true) {
 
-        // Receive message from server
-        char buffer[4096] = {0};
-        int bytes = recv(client_socket, buffer, sizeof(buffer), 0);
-
-        if (bytes <= 0) {
+        // Receive from server
+        std::string msg = recvMsg();
+        if (msg.empty()) {
             std::cout << "Server disconnected." << std::endl;
             break;
         }
 
-        std::string msg(buffer);
         std::cout << msg;
 
-        // Login prompts — just send input directly
+        // Handle login
         if (msg.find("Username:") != std::string::npos ||
-            msg.find("Password:") != std::string::npos) {
+            msg.find("Password:") != std::string::npos ||
+            msg.find("Attempt") != std::string::npos) {
             std::string input;
             std::getline(std::cin, input);
-            sendMessage(client_socket, input);
+            sendMsg(input);
             continue;
         }
 
-        // Main menu
+        // Handle menu
         if (msg.find("Choice:") != std::string::npos) {
             std::string choice;
             std::getline(std::cin, choice);
-            sendMessage(client_socket, choice);
+            sendMsg(choice);
 
-            // Upload
-            if (choice == "2") {
-                uploadFile(client_socket);
-            }
-
-            // Download
-            if (choice == "3") {
-                // Wait for server to ask filename
-                char buf2[4096] = {0};
-                recv(client_socket, buf2, sizeof(buf2), 0);
-                std::cout << buf2;
-
-                std::string filename;
-                std::getline(std::cin, filename);
-                sendMessage(client_socket, filename);
-
-                downloadFile(client_socket, filename);
-            }
-
-            // Logout
-            if (choice == "4") {
-                char buf2[4096] = {0};
-                recv(client_socket, buf2, sizeof(buf2), 0);
-                std::cout << buf2 << std::endl;
+            if      (choice == "2") uploadFile();
+            else if (choice == "3") downloadFile();
+            else if (choice == "4") deleteFile();
+            else if (choice == "5") renameFile();
+            else if (choice == "6") {
+                std::cout << recvMsg() << std::endl;
                 break;
             }
-
             continue;
         }
     }
 
-    close(client_socket);
+    close(sock);
     return 0;
 }

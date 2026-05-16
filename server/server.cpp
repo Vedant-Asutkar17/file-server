@@ -74,7 +74,9 @@ void handleClient(int client_socket) {
                            "1. List files\n"
                            "2. Upload file\n"
                            "3. Download file\n"
-                           "4. Logout\n"
+                           "4. Delete file\n"
+                           "5. Rename file\n"
+                           "6. Logout\n"
                            "Choice: ";
         sendMessage(client_socket, menu);
 
@@ -87,13 +89,17 @@ void handleClient(int client_socket) {
 
         // Option 2: Upload file
         } else if (choice == "2") {
-            sendMessage(client_socket, "Enter filename to upload: ");
+            // Tell client to start upload process
+            sendMessage(client_socket, "UPLOAD_START");
+
+            // Receive filename from client
             std::string filename = receiveMessage(client_socket);
 
-            sendMessage(client_socket, "Enter file size in bytes: ");
+            // Receive filesize from client
             std::string sizeStr = receiveMessage(client_socket);
             long filesize = std::stol(sizeStr);
 
+            // Tell client we are ready
             sendMessage(client_socket, "READY");
 
             bool success = fileManager.receiveFile(client_socket, filename, filesize);
@@ -108,11 +114,37 @@ void handleClient(int client_socket) {
         } else if (choice == "3") {
             sendMessage(client_socket, "Enter filename to download: ");
             std::string filename = receiveMessage(client_socket);
-
             fileManager.sendFile(client_socket, filename);
 
-        // Option 4: Logout
+        // Option 4: Delete file
         } else if (choice == "4") {
+            sendMessage(client_socket, "Enter filename to delete: ");
+            std::string filename = receiveMessage(client_socket);
+
+            bool success = fileManager.deleteFile(filename);
+            if (success) {
+                sendMessage(client_socket, "File deleted successfully.\n");
+            } else {
+                sendMessage(client_socket, "File not found.\n");
+            }
+
+        // Option 5: Rename file
+        } else if (choice == "5") {
+            sendMessage(client_socket, "Enter current filename: ");
+            std::string old_name = receiveMessage(client_socket);
+
+            sendMessage(client_socket, "Enter new filename: ");
+            std::string new_name = receiveMessage(client_socket);
+
+            bool success = fileManager.renameFile(old_name, new_name);
+            if (success) {
+                sendMessage(client_socket, "File renamed successfully.\n");
+            } else {
+                sendMessage(client_socket, "Rename failed. File not found or name already exists.\n");
+            }
+
+        // Option 6: Logout
+        } else if (choice == "6") {
             sendMessage(client_socket, "Goodbye " + username + "!\n");
             std::cout << "[-] " << username << " logged out" << std::endl;
             break;
