@@ -8,10 +8,12 @@
 #include <sstream>
 #include "auth.h"
 #include "filemanager.h"
+#include "filelock.h"
 
 // Global objects shared by all threads
 AuthManager auth;
 FileManager fileManager("uploads");
+FileLockManager lockManager;
 
 // Send message to client
 void sendMessage(int socket, std::string message) {
@@ -88,26 +90,33 @@ void handleClient(int client_socket) {
             sendMessage(client_socket, files);
 
         // Option 2: Upload file
-        } else if (choice == "2") {
-            // Tell client to start upload process
+       } else if (choice == "2") {
             sendMessage(client_socket, "UPLOAD_START");
-
-            // Receive filename from client
             std::string filename = receiveMessage(client_socket);
-
-            // Receive filesize from client
+            if (filename == "CANCEL") {
+                receiveMessage(client_socket);
+                sendMessage(client_socket, "Upload cancelled.\n");
+                continue;
+            }
             std::string sizeStr = receiveMessage(client_socket);
             long filesize = std::stol(sizeStr);
 
-            // Tell client we are ready
-            sendMessage(client_socket, "READY");
+            // Try to lock file before uploading
+            if (!lockManager.lockFile(filename)) {
+                sendMessage(client_socket, "File is locked by another user. Try later.\n");
+                continue;
+            }
 
+            sendMessage(client_socket, "READY");
             bool success = fileManager.receiveFile(client_socket, filename, filesize);
 
+            // Always unlock after operation
+            lockManager.unlockFile(filename);
+
             if (success) {
-                sendMessage(client_socket, "\nUpload successful!\n");
+                sendMessage(client_socket, "Upload successful!\n");
             } else {
-                sendMessage(client_socket, "\nUpload failed.\n");
+                sendMessage(client_socket, "Upload failed.\n");
             }
 
         // Option 3: Download file
@@ -121,7 +130,17 @@ void handleClient(int client_socket) {
             sendMessage(client_socket, "Enter filename to delete: ");
             std::string filename = receiveMessage(client_socket);
 
+            // Check if file is locked
+            if (lockManager.isLocked(filename)) {
+                sendMessage(client_socket, "File is locked by another user. Try later.\n");
+                continue;
+            }
+
+            // Lock before deleting
+            lockManager.lockFile(filename);
             bool success = fileManager.deleteFile(filename);
+            lockManager.unlockFile(filename);
+
             if (success) {
                 sendMessage(client_socket, "File deleted successfully.\n");
             } else {
@@ -132,15 +151,24 @@ void handleClient(int client_socket) {
         } else if (choice == "5") {
             sendMessage(client_socket, "Enter current filename: ");
             std::string old_name = receiveMessage(client_socket);
-
             sendMessage(client_socket, "Enter new filename: ");
             std::string new_name = receiveMessage(client_socket);
 
+            // Check if file is locked
+            if (lockManager.isLocked(old_name)) {
+                sendMessage(client_socket, "File is locked by another user. Try later.\n");
+                continue;
+            }
+
+            // Lock before renaming
+            lockManager.lockFile(old_name);
             bool success = fileManager.renameFile(old_name, new_name);
+            lockManager.unlockFile(old_name);
+
             if (success) {
                 sendMessage(client_socket, "File renamed successfully.\n");
             } else {
-                sendMessage(client_socket, "Rename failed. File not found or name already exists.\n");
+                sendMessage(client_socket, "Rename failed.\n");
             }
 
         // Option 6: Logout
