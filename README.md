@@ -66,3 +66,14 @@ make
 | vedant   | vedant123| user  |
 
 ## Architecture
+[GUI Client / Terminal Client]
+↕ TCP Socket (port 9999)
+[File Server]
+↕
+[File Storage]
+## What I Learned
+- How TCP sockets work at the OS level
+- How to handle multiple clients using threads
+- How mutex prevents race conditions
+- How files are transferred as binary chunks over a network
+- Object oriented design with C++ classes
