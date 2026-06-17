@@ -49,8 +49,23 @@ QString FileClient::login(QString username, QString password) {
 
 QString FileClient::listFiles() {
     sendMsg("1");
-    QString files = recvMsg();
-    return files;
+    // Keep receiving until we get FILELIST marker
+    QString response = "";
+    int attempts = 0;
+    while (attempts < 5) {
+        QString msg = recvMsg();
+        if (msg.contains("FILELIST:")) {
+            // Extract content between FILELIST: and :END
+            int start = msg.indexOf("FILELIST:") + 9;
+            int end = msg.indexOf(":END");
+            if (end > start) {
+                response = msg.mid(start, end - start);
+            }
+            break;
+        }
+        attempts++;
+    }
+    return response;
 }
 
 bool FileClient::uploadFile(QString filepath) {

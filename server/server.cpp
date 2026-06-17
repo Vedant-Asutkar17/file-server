@@ -86,8 +86,8 @@ void handleClient(int client_socket) {
 
         // Option 1: List files
         if (choice == "1") {
-            std::string files = fileManager.listFiles();
-            sendMessage(client_socket, files);
+    std::string files = fileManager.listFiles();
+    sendMessage(client_socket, "FILELIST:" + files + ":END");
 
         // Option 2: Upload file
        } else if (choice == "2") {
