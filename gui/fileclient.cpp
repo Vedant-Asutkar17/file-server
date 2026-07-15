@@ -1,5 +1,6 @@
 #include "fileclient.h"
 #include <QThread>
+#include <QDir>
 
 FileClient::FileClient(QObject *parent) : QObject(parent) {
     socket = new QTcpSocket(this);
@@ -137,6 +138,10 @@ bool FileClient::downloadFile(QString filename, QString savepath) {
     qint64 filesize = info.mid(3).toLongLong();
 
     // Receive file
+    // If savepath has no folder — save to downloads folder
+if (!savepath.contains("/")) {
+    savepath = QDir::homePath() + "/file-server/client/downloads/" + savepath;
+}
     QFile file(savepath);
     file.open(QIODevice::WriteOnly);
     qint64 received = 0;

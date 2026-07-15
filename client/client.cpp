@@ -105,7 +105,10 @@ void downloadFile() {
     std::cout << "Size: " << filesize << " bytes. Downloading..." << std::endl;
 
     // Receive file
-    std::ofstream outfile(filename, std::ios::binary);
+    // Save to downloads folder
+std::string savepath = "/home/asus/file-server/client/downloads/" + filename;
+std::cout << "Saving to: " << savepath << std::endl;
+std::ofstream outfile(savepath, std::ios::binary);
     char buffer[4096];
     long received = 0;
     while (received < filesize) {
