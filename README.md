@@ -35,7 +35,6 @@ file-server/
 │   └── gui.pro         # Qt project file
 └── README.md
 
-## How to Run
 
 ### Server
 ```bash
@@ -77,3 +76,30 @@ make
 - How mutex prevents race conditions
 - How files are transferred as binary chunks over a network
 - Object oriented design with C++ classes
+## Docker Deployment
+
+### Run Server with Docker (No installation needed)
+
+```bash
+# Pull and run server
+docker pull YOUR_USERNAME/file-server:latest
+docker run -d --name myfileserver -p 9999:9999 YOUR_USERNAME/file-server:latest
+
+# Check server is running
+docker ps
+
+# View server logs
+docker logs myfileserver
+
+# Stop server
+docker stop myfileserver
+```
+
+### Build Docker image locally
+
+```bash
+git clone https://github.com/Vedant-Asutkar17/file-server.git
+cd file-server
+docker build -t file-server .
+docker run -d --name myfileserver -p 9999:9999 file-server
+```

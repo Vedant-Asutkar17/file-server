@@ -1,0 +1,6 @@
+client/
+gui/
+*.o
+server/server
+client/client
+.git
