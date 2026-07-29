@@ -103,3 +103,12 @@ cd file-server
 docker build -t file-server .
 docker run -d --name myfileserver -p 9999:9999 file-server
 ```
+## Run with Docker
+
+```bash
+docker pull vedant17111/file-server:latest
+docker run -d -p 9999:9999 vedant17111/file-server:latest
+```
+
+## Docker Hub
+https://hub.docker.com/r/vedant17111/file-server
